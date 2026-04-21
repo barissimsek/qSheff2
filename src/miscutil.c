@@ -99,7 +99,7 @@ misc_setlogdir(const char *l)
 #ifdef __REENTRANT
 	pthread_mutex_lock(&logmtx);
 #endif
-	strncpy(logdir, l, 1023);
+	strncpy(logdir, l, sizeof(logdir)-1);
 #ifdef __REENTRANT
 	pthread_mutex_unlock(&logmtx);
 #endif
@@ -111,7 +111,7 @@ misc_setlogfile(const char *l)
 #ifdef __REENTRANT
 	pthread_mutex_lock(&logmtx);
 #endif
-	strncpy(logfile, l, 1023);
+	strncpy(logfile, l, sizeof(logfile)-1);
 #ifdef __REENTRANT
 	pthread_mutex_unlock(&logmtx);
 #endif
@@ -149,7 +149,7 @@ misc_openlog()
 {
 	char logpath[1024];
 
-	snprintf(logpath, 1023, "%s/%s", logdir, logfile);
+	snprintf(logpath, sizeof(logpath)-1, "%s/%s", logdir, logfile);
 #ifdef __REENTRANT
 	pthread_mutex_lock(&logmtx);
 #endif
@@ -180,7 +180,7 @@ misc_closelog()
 #ifdef __REENTRANT
 		pthread_mutex_unlock(&logmtx);
 #endif
-		return -errno;
+		return -1;
 	}
 	logp = NULL;
 #ifdef __REENTRANT
@@ -201,8 +201,8 @@ misc_rotatelog()
 	time(&tv);
 	localtime_r(&tv, &tm);
 	strftime(tbuf, 63, "%Y.%m.%d-%H.%M.%S", &tm);
-	snprintf(movepath, 1023, "%s/%s-%s", logdir, logfile, tbuf);
-	snprintf(logpath, 1023, "%s/%s", logdir, logfile);
+	snprintf(movepath, sizeof(movepath)-1, "%s/%s-%s", logdir, logfile, tbuf);
+	snprintf(logpath, sizeof(logpath)-1, "%s/%s", logdir, logfile);
 
 	misc_debug(0, "Switching main server log from %s to %s\n", logpath, movepath);
 	if (misc_closelog() < 0)
@@ -231,10 +231,11 @@ char *
 misc_trim(char *s, int len)
 {
 	int i, j = 0;
-	char *tmp = (char *)malloc(len);
+	int slen = strlen(s);
+	char *tmp = (char *)malloc(slen + 1);
 
-	len = strlen(s);
-	for (i = 0, j = 0; i < (len - 1);  i++) {
+	if (tmp == NULL) return s;
+	for (i = 0; i < slen; i++) {
 		if (s[i] == ' ')
 			continue;
 		tmp[j++] = s[i];
@@ -294,30 +295,27 @@ misc_debug(int l, char *fmt, ...)
 	strftime(tbuf, 63, "%d/%m/%Y %H:%M:%S", &tm);
 	snprintf(lfmt, sizeof(lfmt) - 1, "%s: %s", tbuf, fmt);
 	va_start(ap, fmt);
-	if (vfprintf(lp, lfmt, ap) < 1) {
+	if (vfprintf(lp, lfmt, ap) < 0) {
+		va_end(ap);
 #ifdef __REENTRANT
 		pthread_mutex_unlock(&logmtx);
 #endif
 		misc_closelog();
 		misc_openlog();
-#ifdef __REENTRANT
-		pthread_mutex_lock(&logmtx);
-#endif
+		return;
 	}
+	va_end(ap);
 	if (fflush(lp) != 0) {
 #ifdef __REENTRANT
 		pthread_mutex_unlock(&logmtx);
 #endif
 		misc_closelog();
 		misc_openlog();
-#ifdef __REENTRANT
-		pthread_mutex_lock(&logmtx);
-#endif
+		return;
 	}
 #ifdef __REENTRANT
 	pthread_mutex_unlock(&logmtx);
 #endif
-	va_end(ap);
 }
 
 char * 
@@ -326,7 +324,7 @@ misc_getunamestr(char *uname_str, int len)
 	struct utsname uts;
 
 	if (uname(&uts) < 0)
-		strncpy(uname_str, "Undefined host", sizeof(uname_str)-1);
+		strncpy(uname_str, "Undefined host", len-1);
 	else
 		snprintf(uname_str, len - 1, "%s [%s %s %s %s]",
 				uts.nodename, uts.sysname, uts.release, uts.version, uts.machine);
@@ -344,23 +342,23 @@ misc_getuptimestr(char *uptime_str, int len, time_t firetime)
 	diff = now - firetime;
 	memset(uptime_str, 0, len);
 	if (diff > 86400) {
-		snprintf(fmt, 31, "%d days ", (int)(diff / 86400));
-		diff -= (diff / 86400) * 86400;
+		snprintf(fmt, sizeof(fmt)-1, "%d days ", (int)(diff / 86400));
+		diff %= 86400;
 		strncpy(uptime_str, fmt, len - 1);
 	}
 	if (diff > 3600) {
-		snprintf(fmt, 31, "%d saat ", (int)(diff / 3600));
-		diff -= (diff / 3600) * 3600;
-		strncat(uptime_str, fmt, len - 1);
+		snprintf(fmt, sizeof(fmt)-1, "%d hours ", (int)(diff / 3600));
+		diff %= 3600;
+		strncat(uptime_str, fmt, len - 1 - (int)strlen(uptime_str));
 	}
 	if (diff > 60) {
-		snprintf(fmt, 31, "%d dakika ", (int)(diff / 60));
-		diff -= (diff / 60) * 60;
-		strncat(uptime_str, fmt, len - 1);
+		snprintf(fmt, sizeof(fmt)-1, "%d minutes ", (int)(diff / 60));
+		diff %= 60;
+		strncat(uptime_str, fmt, len - 1 - (int)strlen(uptime_str));
 	}
 	if (diff > 0) {
-		snprintf(fmt, 31,  "%d saniye", (int)diff);
-		strncat(uptime_str, fmt, len - 1);
+		snprintf(fmt, sizeof(fmt)-1, "%d seconds", (int)diff);
+		strncat(uptime_str, fmt, len - 1 - (int)strlen(uptime_str));
 	}
 	return uptime_str;
 }

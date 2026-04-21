@@ -39,8 +39,6 @@
 #include "toolkit.h"
 #include "loadconfig.h"
 
-extern int errno;
-
 int gen_queue_id(char *qid, int len)
 {
 	struct timeval time_str;
@@ -134,16 +132,22 @@ int rrm_dir(const char *dirpath)
 
 int copy(char *src, char *dst)
 {
-	static int blen = 1024;
-	static char *bp;
-	register int nread, from_fd, to_fd;
+	int blen = 1024;
+	char *bp;
+	int nread, from_fd, to_fd;
 
 	if ((from_fd = open(src, O_RDONLY, 0)) < 0) return -1;
 
-	if ((to_fd = open(dst, O_CREAT | O_EXCL | O_TRUNC | O_WRONLY, 0400)) < 0) return -1;
+	if ((to_fd = open(dst, O_CREAT | O_EXCL | O_TRUNC | O_WRONLY, 0400)) < 0) {
+		close(from_fd);
+		return -1;
+	}
 
-	if((bp = malloc(blen)) == NULL) return -1;
-	memset(bp, 0, 1024);
+	if ((bp = malloc(blen)) == NULL) {
+		close(from_fd); close(to_fd);
+		return -1;
+	}
+	memset(bp, 0, blen);
 
 	for(;;) {
 		nread = read(from_fd, bp, (size_t)blen);
@@ -165,15 +169,11 @@ int copy(char *src, char *dst)
 			errlog(__FILE__, __LINE__, errno);
 			return -1;
 		}
-		memset(bp, 0, 1024);
+		memset(bp, 0, blen);
 	}
 
 	free(bp);
-
 	close(from_fd); close(to_fd);
-
-	/* Check the last read. */
-	if (nread < 0) return -1;
 
 	return 0;
 }
@@ -195,10 +195,12 @@ char ret_subdir(char *root)
 
 	while (i < 16)
 	{
-		strncpy(path, root, 1000);
+		strncpy(path, root, 1021);
+		path[1021] = '\0';
 		j = strlen(path);
 		path[j] = '/';
 		path[j+1] = HEX_TBL[i];
+		path[j+2] = '\0';
 		if (stat(path, &sb) == -1) {
 			free(path);
 			return 1;
@@ -227,16 +229,16 @@ int backup(char *msgfile, char *bckdir)
 	char *dst;
 
 	if ((dst = (char *) malloc(1024)) != NULL ) {
-		snprintf(dst, 1023, "%s/%s", QSHEFFDIR, bckdir);
+		snprintf(dst, 1024-1, "%s/%s", QSHEFFDIR, bckdir);
 		subdir = ret_subdir(dst);
-		if(subdir > 2) {
+		if(subdir != 1 && subdir != 'x') {
 			memset(dst, 0, 1024);
-			snprintf(dst, 1023, "%s/%s/%c/%s", QSHEFFDIR, bckdir, subdir, qid);
+			snprintf(dst, 1024-1, "%s/%s/%c/%s", QSHEFFDIR, bckdir, subdir, qid);
 			if (mkdir(dst, 0700) == -1) {
 				free(dst);
 				return -1;
 			}
-			snprintf(dst, 1023, "%s/%s/%c/%s/mesg", QSHEFFDIR, bckdir, subdir, qid);
+			snprintf(dst, 1024-1, "%s/%s/%c/%s/mesg", QSHEFFDIR, bckdir, subdir, qid);
 			copy(msgfile, dst);
 		}
 		free(dst);

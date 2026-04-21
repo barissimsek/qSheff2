@@ -45,9 +45,10 @@ char *get_remote_ip()
 	char *p;
 
 	ipenv = getenv("TCPREMOTEIP");
-	if ((ipenv == NULL) || (strlen(ipenv) > sizeof(ipbuf))) return ipenv;
+	if ((ipenv == NULL) || (strlen(ipenv) >= sizeof(ipbuf))) return NULL;
 
-	strcpy (ipbuf, ipenv);
+	strncpy(ipbuf, ipenv, sizeof(ipbuf)-1);
+	ipbuf[sizeof(ipbuf)-1] = '\0';
 	ipaddr = ipbuf;
 
 	/* Convert ::ffff:127.0.0.1 format to 127.0.0.1
@@ -68,12 +69,12 @@ char *get_remote_ip()
 
 int parse_header()
 {
-	FILE *fd;
+	FILE *fp;
 	char line[1024];
 	char *str;
 	char *tmp;
 
-	if((fd = fopen("_headers_", "r")) == NULL) {
+	if((fp = fopen("_headers_", "r")) == NULL) {
 		errlog(__FILE__, __LINE__, errno);
 		return -1;
 	}
@@ -83,9 +84,9 @@ int parse_header()
 	memset(subject, 0, sizeof(subject));
 	memset(rfc821_name, 0, sizeof(rfc821_name));
 
-	while(fgets(line, sizeof(line), fd)) {
+	while(fgets(line, sizeof(line), fp)) {
 		if (line[0] == '\n') break;
-		line[strlen(line)-1] = '\0';
+		line[strcspn(line, "\n")] = '\0';
 
 		if((strncasecmp(line, "From:", 5) == 0) && (mailfrom[0] == '\0')) {
 			if((str = strchr(line, ':')) == NULL) continue;
@@ -123,15 +124,16 @@ int parse_header()
 		else if(strncmp(line, "Content-Type: text/html;", 24) == 0) {
 			if((str = strstr(line, "name=")) != NULL) {
 				str = str + 5;
-				strncpy(rfc821_name, str, sizeof(rfc821_name)-1);
 				while((*str != '\0') && (*str != ';') && (*str != ' ') && (*str != '\t') && (*str != '\n'))
 					str++;
 				*str = '\0';
+				str = strstr(line, "name=") + 5;
+				strncpy(rfc821_name, str, sizeof(rfc821_name)-1);
 			}
 		}
 	}
 
-	fclose(fd);
+	fclose(fp);
 
 #ifdef _DEBUG_
 	printf("  . Remote IP: '%s'\n", remoteip);

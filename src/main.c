@@ -56,7 +56,6 @@
 
 #define SIGNATURE_SIZE 76
 
-extern int errno;
 
 static int fd;
 
@@ -71,11 +70,10 @@ static char *binqqargs[2] = { "bin/qmail-queue.orig", 0 };
 #ifdef _DEBUG_
 static void print_greeting()
 {
-        printf("\n");
+    printf("\n");
 	fprintf(stdout, "qSheff v%s - $Id: main.c,v 1.10 2007/04/16 16:06:10 simsek Exp $\n", VERSION);
 	fprintf(stdout, "(C) Copyright 2004-2006 Baris Simsek, http://www.enderunix.org/simsek/\n\n");
 	fprintf(stdout, "Ready for input stream.\n\n");
-
 }
 #endif
 
@@ -152,16 +150,13 @@ static int run_ripmime()
                 case -1:
 			errlog(__FILE__, __LINE__, errno);
                         return -11;
-			break;
                 case 0:
                         /* Child process. */
                         close(1);
                         close(2);
-                        if(execl(RIPMIME, RIPMIME, "-e", "-i", msgfile, "-d", tempdir, NULL ) == -1) {
-				errlog(__FILE__, __LINE__, errno);
-				_exit(-11);
-			}
-			exit(-11); /* Does it possible? */
+                        execl(RIPMIME, RIPMIME, "-e", "-i", msgfile, "-d", tempdir, NULL);
+			errlog(__FILE__, __LINE__, errno);
+			_exit(-11);
         }
 
         /* wait for ripmime to get return status. */
@@ -189,24 +184,24 @@ static int run_ripmime()
 static int search_ignored()
 {
 	int ret;
-	FILE *fd;
+	FILE *fp;
 	char line[256];
 
-	if ((fd = fopen(IGNLISTFILE, "r")) == NULL) {
+	if ((fp = fopen(IGNLISTFILE, "r")) == NULL) {
 		errlog(__FILE__, __LINE__, errno);
 		return -1;
 	}
 
-	while(!feof(fd)) {
+	while(!feof(fp)) {
 		memset(line, 0, sizeof(line));
-	
-		if (fgets(line, sizeof(line), fd) == NULL) {
-			if (feof(fd)) {
-				fclose(fd);
+
+		if (fgets(line, sizeof(line), fp) == NULL) {
+			if (feof(fp)) {
+				fclose(fp);
 				return 0;
 			}
 			else {
-				fclose(fd);
+				fclose(fp);
 				errlog(__FILE__, __LINE__, errno);
 				return -1;
 			}
@@ -214,15 +209,15 @@ static int search_ignored()
 
 		if ((line[0] == '#') || (line[0] == ' ') || (line[2] == '\0')) continue;
 
-		line[strlen(line)-1] = '\0';
+		if (strlen(line) > 0) line[strlen(line)-1] = '\0';
 
 		str_cpy(spam_word, line, sizeof(spam_word)-1);
-	
-		if ((ret = do_regex(mailfrom, line)) == 1) {fclose(fd);return 1;}
-		if ((ret = do_regex(remoteip, line)) == 1) {fclose(fd);return 1;}
+
+		if ((ret = do_regex(mailfrom, line)) == 1) {fclose(fp);return 1;}
+		if ((ret = do_regex(remoteip, line)) == 1) {fclose(fp);return 1;}
 	}
 
-	fclose(fd);
+	fclose(fp);
 
 	return 0;
 }
@@ -261,7 +256,7 @@ static int alter_subj(const char *path, int modno)
 	snprintf(to_path, sizeof(to_path)-1, "%s.tmp", path);
 	if ((to_fd = fopen(to_path, "w")) == NULL) return -1;
 
-	if ((bp = malloc(blen)) == NULL) return -1;
+	if ((bp = malloc(blen)) == NULL) { fclose(from_fd); fclose(to_fd); return -1; }
 	memset(bp, 0, blen);
 
 	while (fgets(bp, (size_t)blen, from_fd) != NULL) {
@@ -299,7 +294,7 @@ static int alter_subj(const char *path, int modno)
 				return -1;
 			}
 		}
-		memset(bp, 0x0, 1024);
+		memset(bp, 0x0, blen);
 	}
 
 	#if defined (ENABLE_CLAMAV) && (VIRUS_TAGGING)
@@ -314,7 +309,7 @@ static int alter_subj(const char *path, int modno)
 				}
 			}
 			else break;
-			memset(bp, 0, 1024);
+			memset(bp, 0, blen);
 		}
 		fputs("\n", to_fd);
 		fputs(VIRI_CENSORED, to_fd);
@@ -335,7 +330,7 @@ static int alter_subj(const char *path, int modno)
 			free(bp);
 			return -1;
 		}
-		memset(bp, 0, 1024);
+		memset(bp, 0, blen);
 	}
 	#endif
 
@@ -480,8 +475,6 @@ int main(int argc, char *argv[])
 
 	msgsize = 0;
 	relayclient = 0;
-
-	relayclient = 0;
 	lflag = 0;
 
 	if((remoteipaddr = get_remote_ip()) == NULL) {
@@ -611,7 +604,7 @@ int main(int argc, char *argv[])
 	printf("- parse\n");
 	#endif
 
-	if((ret = parse_header() == -1)) {
+	if((ret = parse_header()) == -1) {
 		clean_exit(EX_TEMPORARY, 1);
 	}
 

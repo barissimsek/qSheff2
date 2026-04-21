@@ -38,8 +38,6 @@
 #include "smtp.h"
 #include "djb.h"
 
-extern int errno;
-
 static int LEVELS[9] = {0, 0, 15, 7, 13, 11, 3, 5, 0};
 static char TAGS[9][8] = {"MAIN", "PARSE", "HEADER", "WBLIST", "ATTACH", "SPAM", "VIRUS", "CUSTOM", "QUEUE" };
 
@@ -67,9 +65,9 @@ int putlog(const int errcode, const int modno)
 	char fromstr[16];
 	
 	loglevel = 0;
-	memset(fromstr, 0, 10);
-	memset(logline, 0, 1024);
-	memset(tmpline, 0, 1024);
+	memset(fromstr, 0, sizeof(fromstr));
+	memset(logline, 0, sizeof(logline));
+	memset(tmpline, 0, sizeof(tmpline));
 
 	if(relayclient == 1)
 		strncpy(fromstr, "relayfrom", sizeof(fromstr)-1);
@@ -78,7 +76,7 @@ int putlog(const int errcode, const int modno)
 
 	snprintf(logline, sizeof(logline)-1, "[qSheff] %s", TAGS[modno]);
 	loglevel = LEVELS[modno];
-	snprintf(tmpline, sizeof(logline)-1, "%s, queue=%s, %s=%s, from=`%s', to=`%s', subj=`%s', size=%d", logline, qid, fromstr, remoteip, mailfrom, mailto, subject, msgsize);
+	snprintf(tmpline, sizeof(tmpline)-1, "%s, queue=%s, %s=%s, from=`%s', to=`%s', subj=`%s', size=%d", logline, qid, fromstr, remoteip, mailfrom, mailto, subject, msgsize);
 	strncpy(logline, tmpline, sizeof(logline)-1);
 
 	if((modno == 8) && (errcode != 0))  {
@@ -93,7 +91,7 @@ int putlog(const int errcode, const int modno)
 		else if(modno == 5)
 			snprintf(tmpline, sizeof(tmpline)-1, "%s, spam=`%s', rule=`%s'", logline, spam_word, rule_word);
 		else if(modno == 6)
-			snprintf(tmpline, sizeof(tmpline)-1, "%s, virus=`%s',", logline, virname);
+			snprintf(tmpline, sizeof(tmpline)-1, "%s, virus=`%s'", logline, virname);
 		else if(modno == 2)
 			snprintf(tmpline, sizeof(tmpline)-1, "%s, domain=`%s', action=`ignore'", logline, spam_word);
 

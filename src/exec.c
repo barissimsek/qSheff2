@@ -39,6 +39,8 @@
 /* FIX ME! This should be defined by autoconf. */
 #define HASWAITPID 1
 
+#define ARG_SIZE 256
+
 int parse_cmdline(char *cmdline)
 {
 	int i, j;
@@ -48,15 +50,15 @@ int parse_cmdline(char *cmdline)
 
 	i = 0;
 	for(;;) {
-		if ((args[i] = (char *) malloc(256)) == NULL) {
+		if ((args[i] = (char *) malloc(ARG_SIZE)) == NULL) {
 			errlog(__FILE__, __LINE__, errno);
 			return -1;
 		}
-		memset(args[i], 0, 256);
+		memset(args[i], 0, ARG_SIZE);
 
 		j = 0;
 		while(*s == ' ') s++;
-		while((*s != '\0') && (*s != ' ')) args[i][j++] = *s++;
+		while((*s != '\0') && (*s != ' ') && (j < ARG_SIZE - 1)) args[i][j++] = *s++;
 		args[i][j] = '\0';
 		i++;
 		if (*s == '\0') break;
@@ -97,24 +99,20 @@ int exec_cmd()
 		case -1:
 			errlog(__FILE__, __LINE__, errno);
 			return -11;
-			break;
 		case 0:
-			if(execve(args[0], args, NULL) == -1) {
-				errlog(__FILE__, __LINE__, errno);
-				exit(-11);
-			}
-			break;
+			execve(args[0], args, NULL);
+			errlog(__FILE__, __LINE__, errno);
+			_exit(-11);
 		default:
-			if (wait(&pstat) == -1) {
+			if (waitpid(pid, &pstat, 0) == -1) {
 				errlog(__FILE__, __LINE__, errno);
 				return -11;
 			}
-
 			if (WIFEXITED(pstat))
 				return WEXITSTATUS(pstat);
 			break;
 	}
-	return -11; /* Normally, program never come here */
+	return -11;
 }
 
 void free_args()
@@ -128,7 +126,7 @@ void free_args()
 
 #ifdef HASWAITPID
 
-int wait_pid(wstat,pid) int *wstat; int pid;
+int wait_pid(int *wstat, int pid)
 {
   int r;
 
@@ -145,7 +143,7 @@ int wait_pid(wstat,pid) int *wstat; int pid;
 static int oldpid = 0;
 static int oldwstat; /* defined if(oldpid) */
 
-int wait_pid(wstat,pid) int *wstat; int pid;
+int wait_pid(int *wstat, int pid)
 {
   int r;
 
